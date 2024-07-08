@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include <stdio.h>
 #include <stdbool.h>
 
 #define hi(u) (((u16)(u))<<8)
@@ -97,6 +98,7 @@ void cpu_instr_pla(cpu_state_t *st, u8* mem) {
     st->tick(); // 2
     st->S++; st->tick(); // 3
     st->A = mem[0x100+st->S];
+    cpu_set_nz(st, st->A);
 }
 void cpu_instr_plp(cpu_state_t *st, u8* mem) {
     st->tick(); // 2
@@ -113,14 +115,15 @@ void cpu_instr_brk(cpu_state_t *st, u8* mem) {
     cpu_sr_t sr = st->P;
     mem[0x100 + (st->S--)] = *(u8*)(&sr); st->tick(); // 5
     st->PC = 0;
-    st->PC |= hi(mem[0xFFFE]); st->tick(); // 6
-    st->PC |= lo(mem[0xFFFF]); // tick 7 in wrapper
+    st->P.I = 1;
+    st->PC |= lo(mem[0xFFFE]); st->tick(); // 6
+    st->PC |= hi(mem[0xFFFF]); // tick 7 in wrapper
 }
 
 void cpu_instr_rti(cpu_state_t *st, u8* mem) {
     st->tick(); // 2
     st->S++; st->tick(); // 3
-    st->P = *(cpu_sr_t*)(&mem[0x100 + (st->S++)]); st->P.B = 0; st->tick(); // 4
+    st->P = *(cpu_sr_t*)(&mem[0x100 + (st->S++)]); st->P.B = 1; st->P.u = 1; st->tick(); // 4
     st->PC = 0;
     st->PC |= lo(mem[0x100 + (st->S++)]); st->tick(); // 5
     st->PC |= ((u16)(mem[0x100 + st->S]) << 8); // tick 6 in wrapper
@@ -216,13 +219,13 @@ void cpu_icl_write_zpg(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*)) {
 // zero page indexed addressing
 void cpu_icl_read_zpi(cpu_state_t *st, u8 *mem, u8 idx, void (*instr)(cpu_state_t*, u8)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = mem[zpa] + idx; st->tick(); // 3
+    u8 addr = zpa + idx;      st->tick(); // 3
     instr(st, mem[addr]);     st->tick(); // 4
 }
 
 void cpu_icl_rmw_zpi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*, u8)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = mem[zpa] + idx; st->tick(); // 3
+    u8 addr = zpa + idx;      st->tick(); // 3
     u8 op = mem[addr];        st->tick(); // 4
     u8 res = instr(st, op);   st->tick(); // 5
     mem[zpa] = res;           st->tick(); // 6
@@ -230,7 +233,7 @@ void cpu_icl_rmw_zpi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*,
 
 void cpu_icl_write_zpi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = mem[zpa] + idx; st->tick(); // 3
+    u8 addr = zpa + idx;      st->tick(); // 3
     mem[addr] = instr(st);    st->tick(); // 4
 }
 
