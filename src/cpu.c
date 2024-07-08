@@ -65,26 +65,74 @@ u8 cpu_instr_stx(cpu_state_t* st) { return st->X; }
 u8 cpu_instr_sty(cpu_state_t* st) { return st->Y; }
 
 // implied instructions
-void cpu_instr_clc(cpu_state_t* st) { st->P.C = 0; }
-void cpu_instr_cld(cpu_state_t* st) { st->P.D = 0; }
-void cpu_instr_cli(cpu_state_t* st) { st->P.I = 0; }
-void cpu_instr_clv(cpu_state_t* st) { st->P.V = 0; }
-void cpu_instr_sec(cpu_state_t* st) { st->P.C = 1; }
-void cpu_instr_sed(cpu_state_t* st) { st->P.D = 1; }
-void cpu_instr_sei(cpu_state_t* st) { st->P.I = 1; }
-void cpu_instr_tax(cpu_state_t *st) { cpu_instr_ldx(st, st->A); }
-void cpu_instr_tay(cpu_state_t *st) { cpu_instr_ldy(st, st->A); }
-void cpu_instr_tsx(cpu_state_t *st) { cpu_instr_ldx(st, st->S); }
-void cpu_instr_txa(cpu_state_t *st) { cpu_instr_lda(st, st->X); }
-void cpu_instr_tya(cpu_state_t *st) { cpu_instr_lda(st, st->Y); }
-void cpu_instr_txs(cpu_state_t *st) { st->S = st->X; }
-void cpu_instr_dex(cpu_state_t *st) { cpu_instr_ldx(st, st->X-1); }
-void cpu_instr_dey(cpu_state_t *st) { cpu_instr_ldy(st, st->Y-1); }
-void cpu_instr_inx(cpu_state_t *st) { cpu_instr_ldx(st, st->X+1); }
-void cpu_instr_iny(cpu_state_t *st) { cpu_instr_ldy(st, st->Y+1); }
-void cpu_instr_nop(cpu_state_t *st) { /* do nothing */ }
+void cpu_instr_clc(cpu_state_t* st, u8* mem) { st->P.C = 0; }
+void cpu_instr_cld(cpu_state_t* st, u8* mem) { st->P.D = 0; }
+void cpu_instr_cli(cpu_state_t* st, u8* mem) { st->P.I = 0; }
+void cpu_instr_clv(cpu_state_t* st, u8* mem) { st->P.V = 0; }
+void cpu_instr_sec(cpu_state_t* st, u8* mem) { st->P.C = 1; }
+void cpu_instr_sed(cpu_state_t* st, u8* mem) { st->P.D = 1; }
+void cpu_instr_sei(cpu_state_t* st, u8* mem) { st->P.I = 1; }
+void cpu_instr_tax(cpu_state_t *st, u8* mem) { cpu_instr_ldx(st, st->A); }
+void cpu_instr_tay(cpu_state_t *st, u8* mem) { cpu_instr_ldy(st, st->A); }
+void cpu_instr_tsx(cpu_state_t *st, u8* mem) { cpu_instr_ldx(st, st->S); }
+void cpu_instr_txa(cpu_state_t *st, u8* mem) { cpu_instr_lda(st, st->X); }
+void cpu_instr_tya(cpu_state_t *st, u8* mem) { cpu_instr_lda(st, st->Y); }
+void cpu_instr_txs(cpu_state_t *st, u8* mem) { st->S = st->X; }
+void cpu_instr_dex(cpu_state_t *st, u8* mem) { cpu_instr_ldx(st, st->X-1); }
+void cpu_instr_dey(cpu_state_t *st, u8* mem) { cpu_instr_ldy(st, st->Y-1); }
+void cpu_instr_inx(cpu_state_t *st, u8* mem) { cpu_instr_ldx(st, st->X+1); }
+void cpu_instr_iny(cpu_state_t *st, u8* mem) { cpu_instr_ldy(st, st->Y+1); }
+void cpu_instr_nop(cpu_state_t *st, u8* mem) { /* do nothing */ }
 
 // multi-cycle implied instructions 
+void cpu_instr_pha(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2 
+    mem[0x100+(st->S--)] = st->A;
+}
+void cpu_instr_php(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2 
+    mem[0x100+(st->S--)] = *(u8*)(&st->P);
+}
+void cpu_instr_pla(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2
+    st->S++; st->tick(); // 3
+    st->A = mem[0x100+st->S];
+}
+void cpu_instr_plp(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2
+    st->S++; st->tick(); // 3
+    st->P = *(cpu_sr_t*)(&mem[0x100+st->S]);
+}
+
+void cpu_instr_brk(cpu_state_t *st, u8* mem) {
+    st->PC++; st->tick(); // 2 (yes, this is a quirk of brk)
+    mem[0x100 + (st->S--)] = lo((st->PC&0xFF00)>>8); st->tick(); // 3
+    mem[0x100 + (st->S--)] = lo(st->PC); st->tick(); // 4
+    cpu_sr_t sr = st->P;
+    sr.B = 1;
+    mem[0x100 + (st->S--)] = *(u8*)(&sr); st->tick(); // 5
+    st->PC = 0;
+    st->PC |= hi(mem[0xFFFE]); st->tick(); // 6
+    st->PC |= lo(mem[0xFFFF]); // tick 7 in wrapper
+}
+
+void cpu_instr_rti(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2
+    st->S++; st->tick(); // 3
+    st->P = *(cpu_sr_t*)(&mem[0x100 + (st->S++)]); st->P.B = 0; st->tick(); // 4
+    st->PC = 0;
+    st->PC |= lo(mem[0x100 + (st->S++)]); st->tick(); // 5
+    st->PC |= ((u16)(mem[0x100 + st->S]) << 8); // tick 6 in wrapper
+}
+
+void cpu_instr_rts(cpu_state_t *st, u8* mem) {
+    st->tick(); // 2
+    st->S++; st->tick(); // 3
+    st->PC = 0;
+    st->PC |= lo(mem[0x100 + (st->S++)]); st->tick(); // 4
+    st->PC |= ((u16)(mem[0x100 + st->S]) << 8); st->tick(); // 5
+    st->PC++; // tick 6 in wrapper
+}
 
 // branches
 bool cpu_instr_bcc(cpu_state_t *st) { return st->P.C == 0; }
@@ -98,8 +146,8 @@ bool cpu_instr_bvs(cpu_state_t *st) { return st->P.V == 1; }
 
 // implied, accumulator instructions
 
-void cpu_icl_all_imp(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*)) {
-    instr(st); // 2, .., n-1
+void cpu_icl_all_imp(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*, u8*)) {
+    instr(st, mem); // 2, .., n-1
     st->tick(); // n
 }
 
@@ -136,6 +184,14 @@ void cpu_icl_write_abs(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*)) {
 void cpu_icl_jmp_abs(cpu_state_t *st, u8 *mem) {
     u16 addr = mem[st->PC++];                 st->tick(); // 2
     addr |= hi(mem[st->PC++]); st->PC = addr; st->tick(); // 3
+}
+
+void cpu_icl_jsr_abs(cpu_state_t *st, u8 *mem) {
+    u16 addr = mem[st->PC++];                        st->tick(); // 2
+                                                     st->tick(); // 3 (internal operation?)
+    mem[0x100 + (st->S--)] = lo((st->PC&0xFF00)>>8); st->tick(); // 4
+    mem[0x100 + (st->S--)] = lo(st->PC);             st->tick(); // 5
+    addr |= hi(mem[st->PC++]); st->PC = addr;        st->tick();
 }
 
 // zero page addressing
@@ -282,17 +338,17 @@ void cpu_exec(cpu_state_t *st, u8 *mem) {
         case 0x8A: cpu_icl_all_imp(st, mem, &cpu_instr_txa); break;
         case 0x9A: cpu_icl_all_imp(st, mem, &cpu_instr_txs); break;
         case 0x98: cpu_icl_all_imp(st, mem, &cpu_instr_tya); break;
-        // case 0x48: cpu_icl_all_imp(st, mem, &cpu_instr_pha); break;
-        // case 0x08: cpu_icl_all_imp(st, mem, &cpu_instr_php); break;
-        // case 0x68: cpu_icl_all_imp(st, mem, &cpu_instr_pla); break;
-        // case 0x28: cpu_icl_all_imp(st, mem, &cpu_instr_plp); break;
+        case 0x48: cpu_icl_all_imp(st, mem, &cpu_instr_pha); break;
+        case 0x08: cpu_icl_all_imp(st, mem, &cpu_instr_php); break;
+        case 0x68: cpu_icl_all_imp(st, mem, &cpu_instr_pla); break;
+        case 0x28: cpu_icl_all_imp(st, mem, &cpu_instr_plp); break;
         case 0xCA: cpu_icl_all_imp(st, mem, &cpu_instr_dex); break;
         case 0x88: cpu_icl_all_imp(st, mem, &cpu_instr_dey); break;
         case 0xE8: cpu_icl_all_imp(st, mem, &cpu_instr_inx); break;
         case 0xC8: cpu_icl_all_imp(st, mem, &cpu_instr_iny); break;
-        // case 0x00: cpu_icl_all_imp(st, mem, &cpu_instr_brk); break;
-        // case 0x40: cpu_icl_all_imp(st, mem, &cpu_instr_rti); break;
-        // case 0x60: cpu_icl_all_imp(st, mem, &cpu_instr_rts); break;
+        case 0x00: cpu_icl_all_imp(st, mem, &cpu_instr_brk); break;
+        case 0x40: cpu_icl_all_imp(st, mem, &cpu_instr_rti); break;
+        case 0x60: cpu_icl_all_imp(st, mem, &cpu_instr_rts); break;
         case 0x18: cpu_icl_all_imp(st, mem, &cpu_instr_clc); break;
         case 0xD8: cpu_icl_all_imp(st, mem, &cpu_instr_cld); break;
         case 0x58: cpu_icl_all_imp(st, mem, &cpu_instr_cli); break;
@@ -344,7 +400,7 @@ void cpu_exec(cpu_state_t *st, u8 *mem) {
         case 0x8C: cpu_icl_write_abs(st, mem, &cpu_instr_sty); break;
 
         case 0x4C: cpu_icl_jmp_abs(st, mem); break;
-        // TODO jsr_abs
+        case 0x20: cpu_icl_jsr_abs(st, mem); break;
 
         case 0xBD: cpu_icl_read_abi(st, mem, st->X, &cpu_instr_lda); break;
         case 0xBC: cpu_icl_read_abi(st, mem, st->X, &cpu_instr_ldy); break;
