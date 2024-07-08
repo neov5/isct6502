@@ -35,19 +35,19 @@ void cpu_instr_sbc(cpu_state_t* st, u8 op) {
     st->A = (u8)res;
 }
 void cpu_instr_bit(cpu_state_t* st, u8 op) { 
-    st->P.N = (op & 0x80)>>8;
-    st->P.V = (op & 0x40)>>7;
+    st->P.N = (op & 0x80)>>7;
+    st->P.V = (op & 0x40)>>6;
     st->P.Z = ((op & st->A) == 0);
 }
 
 // rmw instructions
-u8 cpu_instr_dec(cpu_state_t* st, u8 op) { return op-1; }
-u8 cpu_instr_inc(cpu_state_t* st, u8 op) { return op+1; }
-u8 cpu_instr_asl(cpu_state_t* st, u8 op) { st->P.C = (op&0x80)>>8; cpu_set_nz(st, (u8)(op<<1)); return op<<1; }
+u8 cpu_instr_dec(cpu_state_t* st, u8 op) { cpu_set_nz(st, op-1); return op-1; }
+u8 cpu_instr_inc(cpu_state_t* st, u8 op) { cpu_set_nz(st, op+1); return op+1; }
+u8 cpu_instr_asl(cpu_state_t* st, u8 op) { st->P.C = (op&0x80)>>7; cpu_set_nz(st, (u8)(op<<1)); return op<<1; }
 u8 cpu_instr_lsr(cpu_state_t* st, u8 op) { st->P.C = (op&0x01); cpu_set_nz(st, (u8)(op>>1)); return op>>1; }
 u8 cpu_instr_rol(cpu_state_t* st, u8 op) { 
     u8 sbit = st->P.C;
-    st->P.C = (op&0x80)>>8; 
+    st->P.C = (op&0x80)>>7; 
     u8 res = (u8)(op<<1) | sbit;
     cpu_set_nz(st, res); 
     return res; 
@@ -156,8 +156,8 @@ void cpu_icl_all_imp(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*, u8*))
 }
 
 void cpu_icl_all_acc(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*, u8)) {
-    instr(st, st->A); // 2, .., n-1
-    st->tick(); // n
+    u8 res = instr(st, st->A); // 2, .., n-1
+    st->A = res; st->tick(); // n
 }
 
 void cpu_icl_all_imm(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*, u8)) {
@@ -219,21 +219,21 @@ void cpu_icl_write_zpg(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*)) {
 // zero page indexed addressing
 void cpu_icl_read_zpi(cpu_state_t *st, u8 *mem, u8 idx, void (*instr)(cpu_state_t*, u8)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = zpa + idx;      st->tick(); // 3
+    u8 addr = lo(zpa+idx);    st->tick(); // 3
     instr(st, mem[addr]);     st->tick(); // 4
 }
 
 void cpu_icl_rmw_zpi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*, u8)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = zpa + idx;      st->tick(); // 3
+    u8 addr = lo(zpa+idx);    st->tick(); // 3
     u8 op = mem[addr];        st->tick(); // 4
     u8 res = instr(st, op);   st->tick(); // 5
-    mem[zpa] = res;           st->tick(); // 6
+    mem[addr] = res;          st->tick(); // 6
 }
 
 void cpu_icl_write_zpi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*)) {
     u8 zpa = mem[st->PC++];   st->tick(); // 2
-    u8 addr = zpa + idx;      st->tick(); // 3
+    u8 addr = lo(zpa+idx);    st->tick(); // 3
     mem[addr] = instr(st);    st->tick(); // 4
 }
 
@@ -249,17 +249,17 @@ void cpu_icl_read_abi(cpu_state_t *st, u8 *mem, u8 idx, void (*instr)(cpu_state_
 void cpu_icl_rmw_abi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*, u8)) {
     u16 addr = mem[st->PC++];        st->tick(); // 2
     addr |= hi(mem[st->PC++]);       st->tick(); // 3
-                                     st->tick(); // 4
-    u8 op = mem[addr];               st->tick(); // 5
+    u16 newaddr = addr + idx;        st->tick(); // 4
+    u8 op = mem[newaddr];            st->tick(); // 5
     u8 res = instr(st, op);          st->tick(); // 6
-    mem[addr] = res;                 st->tick(); // 7
+    mem[newaddr] = res;              st->tick(); // 7
 }
 
 void cpu_icl_write_abi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t*)) {
     u16 addr = mem[st->PC++];        st->tick(); // 2
     addr |= hi(mem[st->PC++]);       st->tick(); // 3
-                                     st->tick(); // 4
-    mem[addr] = instr(st);           st->tick(); // 5
+    u16 newaddr = addr + idx;        st->tick(); // 4
+    mem[newaddr] = instr(st);        st->tick(); // 5
 }
 
 void cpu_icl_branch(cpu_state_t *st, u8 *mem, bool (*branch)(cpu_state_t*)) {
@@ -273,16 +273,16 @@ void cpu_icl_branch(cpu_state_t *st, u8 *mem, bool (*branch)(cpu_state_t*)) {
 
 // zero-page indirect preindexed [($nn, X)]
 void cpu_icl_read_zpx(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*, u8)) {
-    u8 ptraddr = mem[st->PC++];    st->tick(); // 2
-    u8 ptr = mem[ptraddr] + st->X; st->tick(); // 3
-    u16 addr = mem[ptr];           st->tick(); // 4
-    addr |= hi(mem[lo(ptr+1)]);    st->tick(); // 5
-    instr(st, mem[addr]);          st->tick(); // 6
+    u8 ptraddr = mem[st->PC++];        st->tick(); // 2
+    u8 ptr = lo(ptraddr + st->X);      st->tick(); // 3
+    u16 addr = mem[ptr];               st->tick(); // 4
+    addr |= hi(mem[lo(ptr+1)]);        st->tick(); // 5
+    instr(st, mem[addr]);              st->tick(); // 6
 }
 
 void cpu_icl_rmw_zpx(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*, u8)) {
     u8 ptraddr = mem[st->PC++];    st->tick(); // 2
-    u8 ptr = mem[ptraddr] + st->X; st->tick(); // 3
+    u8 ptr = lo(ptraddr + st->X);  st->tick(); // 3
     u16 addr = mem[ptr];           st->tick(); // 4
     addr |= hi(mem[lo(ptr+1)]);    st->tick(); // 5
     u8 op = mem[addr];             st->tick(); // 6
@@ -292,7 +292,7 @@ void cpu_icl_rmw_zpx(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*, u8)) {
 
 void cpu_icl_write_zpx(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*)) {
     u8 ptraddr = mem[st->PC++];    st->tick(); // 2
-    u8 ptr = mem[ptraddr] + st->X; st->tick(); // 3
+    u8 ptr = lo(ptraddr + st->X);  st->tick(); // 3
     u16 addr = mem[ptr];           st->tick(); // 4
     addr |= hi(mem[lo(ptr+1)]);    st->tick(); // 5
     mem[addr] = instr(st);         st->tick(); // 6
@@ -303,27 +303,27 @@ void cpu_icl_read_zpy(cpu_state_t *st, u8 *mem, void (*instr)(cpu_state_t*, u8))
     u8 ptr = mem[st->PC++];           st->tick(); // 2
     u16 addr = mem[ptr];              st->tick(); // 3
     addr |= hi(mem[lo(ptr+1)]);
-    u16 newaddr = ptr + st->Y;        st->tick(); // 4
+    u16 newaddr = addr + st->Y;       st->tick(); // 4
     if ((addr & 0xFF) + st->Y > 0xFF) st->tick(); // fixup
-    instr(st, mem[addr]);             st->tick(); // 5/6
+    instr(st, mem[newaddr]);          st->tick(); // 5/6
 }
 
 void cpu_icl_rmw_zpy(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*, u8)) {
     u8 ptr = mem[st->PC++];       st->tick(); // 2
-    u16 addr = mem[ptr] + st->Y;  st->tick(); // 3
+    u16 addr = mem[ptr];          st->tick(); // 3
     addr |= hi(mem[lo(ptr+1)]);   st->tick(); // 4
-                                  st->tick(); // 5
-    u8 op = mem[addr];            st->tick(); // 6
+    u16 newaddr = addr + st->Y;   st->tick(); // 5
+    u8 op = mem[newaddr];         st->tick(); // 6
     u8 result = instr(st, op);    st->tick(); // 7
-    mem[addr] = result;           st->tick(); // 8
+    mem[newaddr] = result;        st->tick(); // 8
 }
 
 void cpu_icl_write_zpy(cpu_state_t *st, u8 *mem, u8 (*instr)(cpu_state_t*)) {
     u8 ptr = mem[st->PC++];       st->tick(); // 2
-    u16 addr = mem[ptr] + st->Y;  st->tick(); // 3
+    u16 addr = mem[ptr];          st->tick(); // 3
     addr |= hi(mem[lo(ptr+1)]);   st->tick(); // 4
-                                  st->tick(); // 5
-    mem[addr] = instr(st);        st->tick(); // 6
+    u16 newaddr = addr + st->Y;   st->tick(); // 5
+    mem[newaddr] = instr(st);     st->tick(); // 6
 }
 
 // absolute indirect addressing 

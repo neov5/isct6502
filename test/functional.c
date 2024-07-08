@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         // if (inst_ctr == 41798) {
         //     printf("%d\n", cpu.P.Z);
         // }
-        if (inst_ctr > 42100) {
+        if (inst_ctr > 54500) {
             printf("%d\t%x\t%x\t%d\t%d\t%d\t%u\t%x\n", inst_ctr, prev_pc, mem[prev_pc], (int8_t)(cpu.X), (int8_t)(cpu.Y), (int8_t)(cpu.A), cpu.S, *(u8*)(&cpu.P));
         }
         if (cpu.PC == prev_pc) {
