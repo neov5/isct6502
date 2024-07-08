@@ -6,6 +6,7 @@ int inst_ctr = 0;
 cpu_state_t cpu;
 
 void tick_fn() {
+    tick_ctr++;
     // if (inst_ctr == 41798 || inst_ctr == 41799) printf("%d\n", cpu.P.C);
     // if (tick_ctr%100 == 0) printf(".");
     // if (tick_ctr%1000 == 0) {
@@ -31,19 +32,20 @@ int main(int argc, char** argv) {
     cpu.S = 0xFF;
     cpu.P.B = 1;
     cpu.P.u = 1;
-    int n_instrs = 80000;
+    int n_instrs = 10000000;
     printf("%x\n", mem[0x0206]);
     // printf("%x\n", mem[0x16]);
     printf("i\tPC\tinst\tX\tY\tA\tS\tP\n");
-    for (; inst_ctr<n_instrs; inst_ctr++) {
+    for (; ; inst_ctr++) {
         u16 prev_pc = cpu.PC;
         // printf("Executing opc 0x%x\n", (uint8_t)(mem[cpu.PC]));
         int res = cpu_exec(&cpu, mem);
         // if (inst_ctr == 41798) {
         //     printf("%d\n", cpu.P.Z);
         // }
-        if (inst_ctr > 54500) {
-            printf("%d\t%x\t%x\t%d\t%d\t%d\t%u\t%x\n", inst_ctr, prev_pc, mem[prev_pc], (int8_t)(cpu.X), (int8_t)(cpu.Y), (int8_t)(cpu.A), cpu.S, *(u8*)(&cpu.P));
+        if (inst_ctr > 26764000) {
+            if (inst_ctr == 158258) printf("%x\n", mem[0x11]);
+            printf("%x\t%x\t%x\t%d\t%d\t%d\t%u\t%x\n", inst_ctr, prev_pc, mem[prev_pc], (int8_t)(cpu.X), (int8_t)(cpu.Y), (int8_t)(cpu.A), cpu.S, *(u8*)(&cpu.P));
         }
         if (cpu.PC == prev_pc) {
             printf("PC trapped at %x\n", prev_pc);
@@ -54,7 +56,7 @@ int main(int argc, char** argv) {
             break;
         }
     }
-    printf("DONE executed %d instrs\n", inst_ctr);
+    printf("DONE executed %d instrs taking %d cycles\n", inst_ctr, tick_ctr);
 
     return 0;
 }

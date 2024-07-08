@@ -22,17 +22,20 @@ void cpu_instr_cpx(cpu_state_t* st, u8 op) { cpu_set_nz(st, st->X - op); st->P.C
 void cpu_instr_cpy(cpu_state_t* st, u8 op) { cpu_set_nz(st, st->Y - op); st->P.C = (op <= st->Y); }
 void cpu_instr_adc(cpu_state_t* st, u8 op) {
     u16 res = (u16)(op) + (u16)(st->A) + (u16)(st->P.C);
-    st->P.C = ((res&0xF00) > 0);
-    st->P.V = ((res ^ (st->A & 0x80)) > 0);
-    cpu_set_nz(st, res);
+    st->P.C = (res > (u16)(0xFF));
+    st->P.V = ((op^lo(res))&(st->A^lo(res))&0x80) > 0;
+    cpu_set_nz(st, (u8)(res & 0xFF));
     st->A = (u8)res;
 }
+// hack learnt from 6502.org
 void cpu_instr_sbc(cpu_state_t* st, u8 op) { 
-    s16 res = (s16)(st->A) - (s16)(op) - (s16)(~st->P.C); // right?
-    st->P.C = ((res&0xF00) > 0);
-    st->P.V = ((res ^ (st->A & 0x80)) > 0);
-    cpu_set_nz(st, res);
-    st->A = (u8)res;
+    cpu_instr_adc(st, ~op);
+    // u16 res = (u16)(st->A) - (u16)op - (u16)(st->P.C ^ 0x1);
+    // printf("0x%x\n", res);
+    // st->P.C = ((u8)(res) >= 0);
+    // st->P.V = (res > 127 || (s16)res < -127);
+    // cpu_set_nz(st, res);
+    // st->A = (u8)res;
 }
 void cpu_instr_bit(cpu_state_t* st, u8 op) { 
     st->P.N = (op & 0x80)>>7;
