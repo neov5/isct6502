@@ -102,6 +102,8 @@ void cpu_instr_plp(cpu_state_t *st, u8* mem) {
     st->tick(); // 2
     st->S++; st->tick(); // 3
     st->P = *(cpu_sr_t*)(&mem[0x100+st->S]);
+    st->P.u = 1;
+    st->P.B = 1; // B, u always read as high
 }
 
 void cpu_instr_brk(cpu_state_t *st, u8* mem) {
@@ -109,7 +111,6 @@ void cpu_instr_brk(cpu_state_t *st, u8* mem) {
     mem[0x100 + (st->S--)] = lo((st->PC&0xFF00)>>8); st->tick(); // 3
     mem[0x100 + (st->S--)] = lo(st->PC); st->tick(); // 4
     cpu_sr_t sr = st->P;
-    sr.B = 1;
     mem[0x100 + (st->S--)] = *(u8*)(&sr); st->tick(); // 5
     st->PC = 0;
     st->PC |= hi(mem[0xFFFE]); st->tick(); // 6
@@ -259,7 +260,7 @@ void cpu_icl_write_abi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t
 }
 
 void cpu_icl_branch(cpu_state_t *st, u8 *mem, bool (*branch)(cpu_state_t*)) {
-    u8 op = mem[st->PC++];   st->tick(); // 2
+    s8 op = mem[st->PC++];   st->tick(); // 2
     if (!branch(st)) return;
     st->tick(); // 3 (if branch is taken)
     u16 old_pc = st->PC;

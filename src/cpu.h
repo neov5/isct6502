@@ -10,14 +10,14 @@ typedef int8_t s8;
 typedef uint32_t u32;
 
 typedef struct {
-    u8 N: 1;
-    u8 V: 1;
-    u8 u: 1;
-    u8 B: 1;
-    u8 D: 1;
-    u8 I: 1;
-    u8 Z: 1;
     u8 C: 1;
+    u8 Z: 1;
+    u8 I: 1;
+    u8 D: 1;
+    u8 B: 1;
+    u8 u: 1;
+    u8 V: 1;
+    u8 N: 1;
 } cpu_sr_t;
 
 typedef struct {
