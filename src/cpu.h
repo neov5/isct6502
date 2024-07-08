@@ -32,6 +32,7 @@ typedef struct {
 
 } cpu_state_t;
 
-void cpu_exec(cpu_state_t *st, u8* mem);
+int cpu_exec(cpu_state_t *st, u8* mem);
+void cpu_reset(cpu_state_t *st, u8* mem);
 
 #endif

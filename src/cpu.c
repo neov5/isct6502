@@ -258,10 +258,13 @@ void cpu_icl_write_abi(cpu_state_t *st, u8 *mem, u8 idx, u8 (*instr)(cpu_state_t
     mem[addr] = instr(st);           st->tick(); // 5
 }
 
-// TODO branches - relative addressing
 void cpu_icl_branch(cpu_state_t *st, u8 *mem, bool (*branch)(cpu_state_t*)) {
     u8 op = mem[st->PC++];   st->tick(); // 2
-    u8 bt = branch(st);  st->tick();
+    if (!branch(st)) return;
+    st->tick(); // 3 (if branch is taken)
+    u16 old_pc = st->PC;
+    st->PC = old_pc + op;
+    if ((old_pc&0xFF) + op > 0xFF) st->tick(); // 4 (if page changes)
 }
 
 // zero-page indirect preindexed [($nn, X)]
@@ -327,10 +330,14 @@ void cpu_icl_jmp_ind(cpu_state_t *st, u8 *mem) {
     st->PC = hi(mem[(ptr & 0xFF00) | lo(ptr+1)]) | latch; st->tick(); // 5
 }
 
-void cpu_exec(cpu_state_t *st, u8 *mem) {
+void cpu_reset(cpu_state_t *st, u8 *mem) {
+    st->PC |= hi(mem[0xFFFE]);
+    st->PC |= lo(mem[0xFFFF]);
+}
+
+int cpu_exec(cpu_state_t *st, u8 *mem) {
 
     u8 opc = mem[st->PC++]; st->tick();
-    u8 res;
     switch (opc) {
         case 0xAA: cpu_icl_all_imp(st, mem, &cpu_instr_tax); break;
         case 0xA8: cpu_icl_all_imp(st, mem, &cpu_instr_tay); break;
@@ -498,5 +505,9 @@ void cpu_exec(cpu_state_t *st, u8 *mem) {
         case 0x10: cpu_icl_branch(st, mem, &cpu_instr_bpl); break;
         case 0x50: cpu_icl_branch(st, mem, &cpu_instr_bvc); break;
         case 0x70: cpu_icl_branch(st, mem, &cpu_instr_bvs); break;
+
+        default: return -1;
     }
+
+    return 0;
 }
