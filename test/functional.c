@@ -7,11 +7,6 @@ cpu_state_t cpu;
 
 void tick_fn() {
     tick_ctr++;
-    // if (inst_ctr == 41798 || inst_ctr == 41799) printf("%d\n", cpu.P.C);
-    // if (tick_ctr%100 == 0) printf(".");
-    // if (tick_ctr%1000 == 0) {
-    //     printf("%x\n", (u16)cpu.PC);
-    // }
 }
 
 int main(int argc, char** argv) {
@@ -21,7 +16,6 @@ int main(int argc, char** argv) {
     
     FILE *f = fopen(argv[1], "rb");
     printf("%s\n", argv[1]);
-    // fgets((char*)mem, 0xFFFF, f);
     fread(mem, 0x10000, 1, f);
     fclose(f);
 
@@ -32,20 +26,16 @@ int main(int argc, char** argv) {
     cpu.S = 0xFF;
     cpu.P.B = 1;
     cpu.P.u = 1;
-    int n_instrs = 10000000;
-    printf("%x\n", mem[0x0206]);
-    // printf("%x\n", mem[0x16]);
     printf("i\tPC\tinst\tX\tY\tA\tS\tP\n");
     for (; ; inst_ctr++) {
         u16 prev_pc = cpu.PC;
-        // printf("Executing opc 0x%x\n", (uint8_t)(mem[cpu.PC]));
         int res = cpu_exec(&cpu, mem);
-        // if (inst_ctr == 41798) {
-        //     printf("%d\n", cpu.P.Z);
-        // }
         if (inst_ctr > 26764000) {
-            if (inst_ctr == 158258) printf("%x\n", mem[0x11]);
-            printf("%x\t%x\t%x\t%d\t%d\t%d\t%u\t%x\n", inst_ctr, prev_pc, mem[prev_pc], (int8_t)(cpu.X), (int8_t)(cpu.Y), (int8_t)(cpu.A), cpu.S, *(u8*)(&cpu.P));
+            printf("Success\n");
+            break;
+            // use to debug:
+            // if (inst_ctr == 158258) printf("%x\n", mem[0x11]);
+            // printf("%x\t%x\t%x\t%d\t%d\t%d\t%u\t%x\n", inst_ctr, prev_pc, mem[prev_pc], (int8_t)(cpu.X), (int8_t)(cpu.Y), (int8_t)(cpu.A), cpu.S, *(u8*)(&cpu.P));
         }
         if (cpu.PC == prev_pc) {
             printf("PC trapped at %x\n", prev_pc);
