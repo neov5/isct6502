@@ -40,13 +40,13 @@ int main() {
 }
 ```
 
+See `test/functional.c` for an example of loading memory from a 64k image
+
 ## TODO
 
 - [ ] Hardware interrupt emulation
 - [ ] Decimal Mode
 - [ ] Undocumented Opcodes (addressing modes exist)
-
-See `test/functional.c` for an example of loading memory from a 64k image
 
 [1]: https://floooh.github.io/2019/12/13/cycle-stepped-6502.html#instruction-stepped-and-cycle-ticked
 [2]: http://atarihq.com/danb/files/64doc.txt
