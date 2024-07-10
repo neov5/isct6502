@@ -4,15 +4,20 @@
 int tick_ctr = 0;
 int inst_ctr = 0;
 cpu_state_t cpu;
+u8 mem[0x10000];
 
 void tick_fn() {
     tick_ctr++;
 }
 
+u8 bus_read_fn(u16 addr) { return mem[addr]; }
+void bus_write_fn(u8 val, u16 addr) { mem[addr] = val; }
+
 int main(int argc, char** argv) {
 
     cpu.tick = &tick_fn;
-    u8 mem[0x10000];
+    cpu.bus_read = &bus_read_fn;
+    cpu.bus_write = &bus_write_fn;
     
     FILE *f = fopen(argv[1], "rb");
     printf("%s\n", argv[1]);
@@ -29,7 +34,7 @@ int main(int argc, char** argv) {
     printf("i\tPC\tinst\tX\tY\tA\tS\tP\n");
     for (; ; inst_ctr++) {
         u16 prev_pc = cpu.PC;
-        int res = cpu_exec(&cpu, mem);
+        int res = cpu_exec(&cpu);
         if (inst_ctr > 26764000) {
             printf("Success\n");
             break;

@@ -28,11 +28,14 @@ typedef struct {
     u8 S;
     cpu_sr_t P;
 
+    u8 (*bus_read)(u16);
+    void (*bus_write)(u8, u16);
+
     void (*tick)(void); 
 
 } cpu_state_t;
 
-int cpu_exec(cpu_state_t *st, u8* mem);
-void cpu_reset(cpu_state_t *st, u8* mem);
+int cpu_exec(cpu_state_t *st);
+void cpu_reset(cpu_state_t *st);
 
 #endif
