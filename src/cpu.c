@@ -5,6 +5,12 @@
 #define hi(u) (((u16)(u))<<8)
 #define lo(u) ((u)&0xFF)
 
+void cpu_state_to_str(cpu_state_t* st, char buf[64]) {
+    snprintf(buf, 64, "[CPU A:%02hhx X:%02hhx Y:%02hhx PC:%04hx S:%02hhx P:%02hhx]", 
+            st->A, st->X, st->Y, st->PC, st->S, st->P.data);
+}
+
+
 void cpu_set_nz(cpu_state_t* st, u8 val) {
     st->P.N = (val >> 7);
     st->P.Z = (val == 0);
@@ -115,6 +121,9 @@ void cpu_instr_plp(cpu_state_t *st) {
 void cpu_instr_brk(cpu_state_t *st) {
     st->PC++; st->tick(); // 2 (yes, this is a quirk of brk)
     st->bus_write(lo((st->PC&0xFF00)>>8), 0x100 + (st->S--)); st->tick(); // 3
+    // TODO If a hardware interrupt (NMI or IRQ) occurs before the fourth (flags
+    // saving) cycle of BRK, the BRK instruction will be skipped, and
+    // the processor will jump to the hardware interrupt vector. (64doc.txt)
     st->bus_write(lo(st->PC), 0x100 + (st->S--)); st->tick(); // 4
     cpu_sr_t sr = st->P;
     st->bus_write(*(u8*)(&sr), 0x100 + (st->S--)); st->tick(); // 5
@@ -273,7 +282,7 @@ void cpu_icl_branch(cpu_state_t *st, bool (*branch)(cpu_state_t*)) {
     st->tick(); // 3 (if branch is taken)
     u16 old_pc = st->PC;
     st->PC = old_pc + op;
-    if ((old_pc&0xFF) + op > 0xFF) st->tick(); // 4 (if page changes)
+    if ((u16)((s16)(old_pc&0xFF) + op) > 0xFF) st->tick(); // 4 (if page changes)
 }
 
 // zero-page indirect preindexed [($nn, X)]
@@ -339,12 +348,43 @@ void cpu_icl_jmp_ind(cpu_state_t *st) {
     st->PC = hi(st->bus_read((ptr & 0xFF00) | lo(ptr+1))) | latch; st->tick(); // 5
 }
 
+
 void cpu_reset(cpu_state_t *st) {
-    st->PC |= hi(st->bus_read(0xFFFE));
-    st->PC |= lo(st->bus_read(0xFFFF));
+    st->PC |= hi(st->bus_read(0xFFFC));
+    st->PC |= lo(st->bus_read(0xFFFD));
+    st->P.I = 1;
+}
+
+void cpu_interrupt(cpu_state_t *st, u16 pc_addr) {
+    st->tick(); // 1
+    st->tick(); // 2
+    st->bus_write(lo((st->PC&0xFF00)>>8), 0x100 + (st->S--)); st->tick(); // 3
+    st->bus_write(lo(st->PC), 0x100 + (st->S--)); st->tick(); // 4
+    cpu_sr_t sr = st->P;
+    st->bus_write(*(u8*)(&sr), 0x100 + (st->S--)); st->tick(); // 5
+    st->PC = 0;
+    st->P.I = 1;
+    st->PC |= lo(st->bus_read(pc_addr)); st->tick(); // 6
+    st->PC |= hi(st->bus_read(pc_addr+1)); st->tick(); // 7
 }
 
 int cpu_exec(cpu_state_t *st) {
+    
+    if (st->NMI == 1) {
+        cpu_interrupt(st, 0xFFFA);
+        st->NMI = 0;
+        return 1;
+    }
+    if (st->IRQ == 1 && st->P.I == 0) {
+        cpu_interrupt(st, 0xFFFE);
+        st->IRQ = 0;
+        return 2;
+    }
+    if (st->RST == 1 && st->P.I == 0) {
+        cpu_interrupt(st, 0xFFFC);
+        st->IRQ = 0;
+        return 3;
+    }
 
     u8 opc = st->bus_read(st->PC++); st->tick();
     switch (opc) {

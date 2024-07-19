@@ -10,6 +10,7 @@ multi-chipset system emulation (eg NES, Apple II)
 - [X] Extensively tested with [Klaus Dormann's functional tests][3]
 - [X] Simple functional interface with tick callback: no 'hacks' required to 
       tick systems at different clock speeds (eg NES PPU clk runs at 3x NES CPU clk)
+- [X] Hardware interrupt (RST/IRQ/NMI) emulation
 
 ## Usage
 
@@ -44,7 +45,6 @@ See `test/functional.c` for an example of loading memory from a 64k image
 
 ## TODO
 
-- [ ] Hardware interrupt emulation
 - [ ] Decimal Mode
 - [ ] Undocumented Opcodes (addressing modes exist)
 
